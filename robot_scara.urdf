@@ -1,0 +1,166 @@
+<?xml version="1.0"?>
+<robot name="robot_scara">
+
+  <!-- ============================================================
+       ESLABONES (links)
+       ============================================================ -->
+
+  <!-- Base 1: cilindro ancho (disco de la base) -->
+  <link name="base_1">
+    <visual>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.12" length="0.10"/>
+      </geometry>
+      <material name="gris">
+        <color rgba="0.5 0.5 0.5 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.12" length="0.10"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <inertia ixx="0.01" ixy="0" ixz="0"
+               iyy="0.01" iyz="0" izz="0.018"/>
+    </inertial>
+  </link>
+
+  <!-- Base 2: cilindro delgado y largo (columna) -->
+  <link name="base_2">
+    <visual>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.04" length="0.30"/>
+      </geometry>
+      <material name="gris">
+        <color rgba="0.5 0.5 0.5 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.04" length="0.30"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.008" ixy="0" ixz="0"
+               iyy="0.008" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+
+  <!-- Link 1: brazo largo rectangular horizontal -->
+  <link name="link_1">
+    <visual>
+      <origin xyz="0.15 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.30 0.06 0.04"/>
+      </geometry>
+      <material name="azul">
+        <color rgba="0.1 0.4 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.15 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.30 0.06 0.04"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.8"/>
+      <inertia ixx="0.001" ixy="0" ixz="0"
+               iyy="0.006" iyz="0" izz="0.006"/>
+    </inertial>
+  </link>
+
+  <!-- Link 2: brazo corto rectangular horizontal -->
+  <link name="link_2">
+    <visual>
+      <origin xyz="0.10 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.20 0.05 0.04"/>
+      </geometry>
+      <material name="azul">
+        <color rgba="0.1 0.4 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.10 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.20 0.05 0.04"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0"
+               iyy="0.003" iyz="0" izz="0.003"/>
+    </inertial>
+  </link>
+
+  <!-- Efector final: vástago que sube y baja -->
+  <link name="end_effector">
+    <visual>
+      <origin xyz="0 0 -0.075" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.15"/>
+      </geometry>
+      <material name="gris_oscuro">
+        <color rgba="0.3 0.3 0.3 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.075" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.15"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.00005" ixy="0" ixz="0"
+               iyy="0.00005" iyz="0" izz="0.00001"/>
+    </inertial>
+  </link>
+
+  <!-- ============================================================
+       JUNTAS (joints)
+       ============================================================ -->
+
+  <!-- Junta fija: une base_1 (disco) con base_2 (columna) -->
+  <joint name="joint_base" type="fixed">
+    <parent link="base_1"/>
+    <child link="base_2"/>
+    <origin xyz="0 0 0.10" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Junta V: rotación en Z — une base_2 con link_1 -->
+  <joint name="joint_V" type="revolute">
+    <parent link="base_2"/>
+    <child link="link_1"/>
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14159" upper="3.14159" effort="50" velocity="1.5"/>
+  </joint>
+
+  <!-- Junta R: rotación en Z — une link_1 con link_2 -->
+  <joint name="joint_R" type="revolute">
+    <parent link="link_1"/>
+    <child link="link_2"/>
+    <origin xyz="0.30 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14159" upper="3.14159" effort="30" velocity="1.5"/>
+  </joint>
+
+  <!-- Junta O: prismática en Z — sube y baja el efector final -->
+  <joint name="joint_O" type="prismatic">
+    <parent link="link_2"/>
+    <child link="end_effector"/>
+    <origin xyz="0.20 0 0.075" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.09" upper="0.06" effort="20" velocity="0.5"/>
+  </joint>
+
+</robot>
