@@ -1,5 +1,5 @@
 from setuptools import find_packages, setup
-from glob import glob
+
 package_name = 'robot_description'
 
 setup(
@@ -11,10 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + "/rviz", ["rviz/rviz.conf.rviz"]),
-        ('share/' + package_name + "/urdf", ["urdf/robot_rrr.urdf",
-                                             "urdf/robot_rrr_2.urdf",
-                                             "urdf/robot_rrr_3.urdf"]),
-        ('share/' + package_name + "/meshes", glob('meshes/*')) # Para incluir todos los archivos dentro de una carpeta con un solo comando
+        ('share/' + package_name + "/urdf", ["urdf/robot_rrr.urdf"]),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

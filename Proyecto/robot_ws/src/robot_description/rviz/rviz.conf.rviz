@@ -8,7 +8,6 @@ Panels:
         - /Status1
         - /RobotModel1
         - /Grid2
-        - /PointStamped1
       Splitter Ratio: 0.5441176295280457
     Tree Height: 437
   - Class: rviz_common/Selection
@@ -32,6 +31,24 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: <Fixed Frame>
+      Value: true
     - Alpha: 1
       Class: rviz_default_plugins/RobotModel
       Collision Enabled: false
@@ -79,24 +96,6 @@ Visualization Manager:
       Value: true
       Visual Enabled: true
     - Alpha: 0.5
-      Cell Size: 1
-      Class: rviz_default_plugins/Grid
-      Color: 160; 160; 164
-      Enabled: true
-      Line Style:
-        Line Width: 0.029999999329447746
-        Value: Lines
-      Name: Grid
-      Normal Cell Count: 0
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Plane: XY
-      Plane Cell Count: 10
-      Reference Frame: <Fixed Frame>
-      Value: true
-    - Alpha: 0.5
       Cell Size: 0.05000000074505806
       Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
@@ -113,21 +112,6 @@ Visualization Manager:
       Plane: XZ
       Plane Cell Count: 40
       Reference Frame: <Fixed Frame>
-      Value: true
-    - Alpha: 0.5
-      Class: rviz_default_plugins/PointStamped
-      Color: 204; 41; 204
-      Enabled: true
-      History Length: 1
-      Name: PointStamped
-      Radius: 0.10000000149011612
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /clicked_point
       Value: true
   Enabled: true
   Global Options:
@@ -175,25 +159,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 3.5308644771575928
+      Distance: 3.839244842529297
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.17780964076519012
-        Y: -0.12164513021707535
-        Z: 0.24654188752174377
+        X: 0.2680705785751343
+        Y: -0.15310890972614288
+        Z: -0.050594303756952286
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.01960020884871483
+      Pitch: 0.37039920687675476
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.7703609466552734
+      Yaw: 0.9953616857528687
     Saved: ~
 Window Geometry:
   Displays:

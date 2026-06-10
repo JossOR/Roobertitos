@@ -2,7 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from robot_kinematics.kinematics import Robot
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, PointStamped
 from sensor_msgs.msg import JointState
 
 class PublicadorTrayectoria(Node):
@@ -10,10 +10,16 @@ class PublicadorTrayectoria(Node):
     super().__init__("nodo_publicador")
     # Instanciar robot
     self.robot = Robot()
-    # Suscriptor para posiciones deseadas
+    # Suscriptor para posiciones deseadas como Twist
     self.sub_twist = self.create_subscription(Twist, 
                                               "/goals_twist",
                                               self.twist_callback,
+                                              1)
+    # Suscriptor para clicked_point desde RViz
+    self.sub_point = self.create_subscription(
+                                              PointStamped,
+                                              "/clicked_point",
+                                              self.point_callback,
                                               1)
     # Publicador estado de las juntas
     self.js_pub = self.create_publisher(JointState, 
@@ -26,8 +32,21 @@ class PublicadorTrayectoria(Node):
     self.joint_state_msg.name = ["shoulder_joint",
                                  "arm_joint",
                                  "forearm_joint"]
-  # Callback de posición deseada como twist
-  def twist_callback(self, msg:Twist):
+
+  # Callback para clicked_point desde RViz
+  def point_callback(self, msg: PointStamped):
+    if self.is_moving:
+      return
+    self.get_logger().info("Punto recibido desde RViz: x={:.3f}, y={:.3f}, z={:.3f}".format(
+      msg.point.x, msg.point.y, msg.point.z))
+    twist = Twist()
+    twist.linear.x = msg.point.x
+    twist.linear.z = msg.point.z
+    twist.angular.y = 0.0
+    self.twist_callback(twist)
+
+  # Callback de posición deseada como Twist
+  def twist_callback(self, msg: Twist):
     if self.is_moving:
       return
     self.is_moving = True
@@ -36,17 +55,15 @@ class PublicadorTrayectoria(Node):
                         xi_f=(msg.linear.x, 
                               msg.linear.z, 
                               msg.angular.y))
-    self.get_logger().info("Posición final EF: {}".format
-    (self.robot.xi_m[:, self.robot.muestras - 1]))
-
-    self.get_logger().info("Posición final juntas: {}".format
-    (self.robot.th_m[:, self.robot.muestras - 1]))
+    self.get_logger().info("Posición final EF: {}".format(
+      self.robot.xi_m[:, self.robot.muestras - 1]))
+    self.get_logger().info("Posición final juntas: {}".format(
+      self.robot.th_m[:, self.robot.muestras - 1]))
     self.robot.imp_tray()
     self.robot.imp_junt()
-    # Publicando última posición de las juntas
     # Agregar marca de tiempo
     self.joint_state_msg.header.stamp = self.get_clock().now().to_msg()
-    # Agregar posición de las juntas
+    # Agregar posición final de las juntas
     self.joint_state_msg.position = [
       float(self.robot.th_m[0, self.robot.muestras - 1]),
       float(self.robot.th_m[1, self.robot.muestras - 1]),
@@ -55,7 +72,6 @@ class PublicadorTrayectoria(Node):
     self.js_pub.publish(self.joint_state_msg)
     # Liberar el movimiento del robot
     self.is_moving = False
-    
 
 def main():
   try:
@@ -64,6 +80,7 @@ def main():
     rclpy.spin(publicador)
     rclpy.shutdown()
   except KeyboardInterrupt as e:
-    print(e) 
+    print(e)
+
 if __name__ == "__main__":
   main()

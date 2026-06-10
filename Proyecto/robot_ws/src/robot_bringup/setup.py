@@ -11,8 +11,6 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/rviz_bringup.launch.py',
-                                               'launch/rviz_bringup_2.launch.py',
-                                               'launch/rviz_bringup_3.launch.py',
                                                'launch/trajectory_bringup.launch.py']),
         
     ],

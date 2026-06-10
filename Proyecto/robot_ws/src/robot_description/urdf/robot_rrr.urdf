@@ -1,71 +1,187 @@
-<robot name="robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <!--Descripción de los eslabones-->
+<?xml version="1.0"?>
+<robot name="robot_proyecto">
+
+  <!-- ==================== MATERIALES ==================== -->
+  <material name="gris">
+    <color rgba="0.5 0.5 0.5 1.0"/>
+  </material>
+  <material name="azul">
+    <color rgba="0.2 0.4 0.8 1.0"/>
+  </material>
+  <material name="verde">
+    <color rgba="0.2 0.7 0.3 1.0"/>
+  </material>
+  <material name="rojo">
+    <color rgba="0.8 0.2 0.2 1.0"/>
+  </material>
+
+  <!-- ==================== WORLD / GROUND ==================== -->
+  <link name="world"/>
+
+  <!-- ==================== BASE CIRCULAR (fija al suelo) ==================== -->
   <link name="base_link">
     <visual>
       <geometry>
-        <box size="0.5 0.5 0.1"/>
+        <cylinder radius="0.15" length="0.05"/>
       </geometry>
-      <origin xyz="0 0 -0.05"/>
-      <material name="black">
-        <color rgba="0 0 0 0.5"/>
-      </material>
+      <origin xyz="0 0 0.025" rpy="0 0 0"/>
+      <material name="gris"/>
     </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.15" length="0.05"/>
+      </geometry>
+      <origin xyz="0 0 0.025" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="2.0"/>
+      <origin xyz="0 0 0.025"/>
+      <inertia ixx="0.015" iyy="0.015" izz="0.022" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
 
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== SHOULDER LINK (plataforma giratoria, revolute Z) ==================== -->
   <link name="shoulder_link">
     <visual>
       <geometry>
-        <box size="0.3 0.05 0.05"/>
+        <cylinder radius="0.12" length="0.03"/>
       </geometry>
-      <origin xyz="0.15 0 0"/>
-      <material name="cyan">
-        <color rgba="0 1 1 1"/>
-      </material>
+      <origin xyz="0 0 0.015" rpy="0 0 0"/>
+      <material name="azul"/>
     </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.12" length="0.03"/>
+      </geometry>
+      <origin xyz="0 0 0.015" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <origin xyz="0 0 0.015"/>
+      <inertia ixx="0.005" iyy="0.005" izz="0.009" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
+
+  <joint name="shoulder_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="shoulder_link"/>
+    <origin xyz="0 0 0.05" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14159" upper="3.14159" effort="50" velocity="1.0"/>
+  </joint>
+
+  <!-- ==================== ESLABÓN FIJO VERTICAL ==================== -->
+  <link name="eslabon_fijo">
+    <visual>
+      <geometry>
+        <box size="0.04 0.04 0.30"/>
+      </geometry>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <material name="gris"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="0.04 0.04 0.30"/>
+      </geometry>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="1.5"/>
+      <origin xyz="0 0 0.15"/>
+      <inertia ixx="0.012" iyy="0.012" izz="0.001" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="joint_fijo" type="fixed">
+    <parent link="shoulder_link"/>
+    <child link="eslabon_fijo"/>
+    <origin xyz="0 0 0.03" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== ARM LINK (eslabón 1, revolute Y) ==================== -->
   <link name="arm_link">
     <visual>
       <geometry>
-        <box size="0.3 0.05 0.05"/>
+        <box size="0.03 0.03 0.35"/>
       </geometry>
-      <origin xyz="0.15 0 0"/>
-      <material name="magenta">
-        <color rgba="1 0 1 1"/>
-      </material>
+      <origin xyz="0 0 0.175" rpy="0 0 0"/>
+      <material name="verde"/>
     </visual>
+    <collision>
+      <geometry>
+        <box size="0.03 0.03 0.35"/>
+      </geometry>
+      <origin xyz="0 0 0.175" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="1.0"/>
+      <origin xyz="0 0 0.175"/>
+      <inertia ixx="0.011" iyy="0.011" izz="0.001" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
+
+  <joint name="arm_joint" type="revolute">
+    <parent link="eslabon_fijo"/>
+    <child link="arm_link"/>
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.5708" upper="1.5708" effort="30" velocity="1.0"/>
+  </joint>
+
+  <!-- ==================== FOREARM LINK (eslabón 2, revolute Y) ==================== -->
   <link name="forearm_link">
     <visual>
       <geometry>
-        <box size="0.3 0.05 0.05"/>
+        <box size="0.025 0.025 0.30"/>
       </geometry>
-      <origin xyz="0.15 0 0"/>
-      <material name="yellow">
-        <color rgba="1 1 0 1"/>
-      </material>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <material name="rojo"/>
     </visual>
+    <collision>
+      <geometry>
+        <box size="0.025 0.025 0.30"/>
+      </geometry>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="0.8"/>
+      <origin xyz="0 0 0.15"/>
+      <inertia ixx="0.006" iyy="0.006" izz="0.001" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
   </link>
 
-  <!--Descripción de las juntas-->
-  <joint name="shoulder_joint" type="revolute"> <!--tipo de junta: revolute, prismatic, fixed-->
-    <parent link="base_link"/>
-    <child link="shoulder_link"/>
-    <axis xyz="0 0 1"/>
-    <limit lower="-3.14" upper ="3.14" effort="10.0" velocity="10.0"/>
-    <origin rpy="1.57 0 0" xyz="0 0 0"/> <!--roll, pitch, yaw-->
-  </joint>
-  <joint name="arm_joint" type="revolute"> <!--tipo de junta: revolute, prismatic, fixed-->
-    <parent link="shoulder_link"/>
-    <child link="arm_link"/>
-    <axis xyz="0 0 1"/>
-    <limit lower="-3.14" upper ="3.14" effort="10.0" velocity="10.0"/>
-    <origin xyz="0.3 0 0" rpy="0 0 0"/>
-  </joint>
-  <joint name="forearm_joint" type="revolute"> <!--tipo de junta: revolute, prismatic, fixed-->
+  <joint name="forearm_joint" type="revolute">
     <parent link="arm_link"/>
     <child link="forearm_link"/>
-    <axis xyz="0 0 1"/>
-    <limit lower="-3.14" upper ="3.14" effort="10.0" velocity="10.0"/>
-    <origin xyz="0.3 0 0"/>
+    <origin xyz="0 0 0.35" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.5708" upper="1.5708" effort="20" velocity="1.0"/>
   </joint>
+
+  <!-- ==================== END EFFECTOR ==================== -->
+  <link name="end_effector">
+    <visual>
+      <geometry>
+        <sphere radius="0.02"/>
+      </geometry>
+      <material name="gris"/>
+    </visual>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia ixx="0.0001" iyy="0.0001" izz="0.0001" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+  </link>
+
+  <joint name="joint_ee" type="fixed">
+    <parent link="forearm_link"/>
+    <child link="end_effector"/>
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
+  </joint>
+
 </robot>
