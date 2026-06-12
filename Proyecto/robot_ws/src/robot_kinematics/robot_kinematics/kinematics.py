@@ -1,182 +1,443 @@
 #!/usr/bin/env python3
-from sympy import *
-import matplotlib.pyplot as plt
 
-class Robot():
-  def __init__(self, 
-               l:tuple[float]=(0.3, 0.3, 0.3)):
-    th1, th2, th3 = symbols("theta_1,theta_2,theta_3")
+import math
+from typing import Optional, Sequence, Tuple
 
-    T_0_1 = self.tr_h(gamma=pi/2,
-                      alpha=th1)
-    T_1_2 = self.tr_h(x = l[0],
-                      alpha=th2)
-    T_2_3 = self.tr_h(x = l[1],
-                      alpha=th3)
-    T_3_p = self.tr_h(x=l[2])
+import numpy as np
 
-    T_0_p = T_0_1 * T_1_2 * T_2_3 * T_3_p
-    T_0_p = simplify(T_0_p)
-    # Vector de postura
-    xi_0_p = Matrix([T_0_p[0, 3],
-                     T_0_p[2, 3],
-                     th1 + th2 + th3])
-    # Jacobiano
-    J = Matrix([[diff(xi_0_p, th1),
-                 diff(xi_0_p, th2),
-                 diff(xi_0_p, th3)]])
-    J_inv = J.inv()
 
-    # Velocidades del E.F. como variables
-    x_dot, z_dot, beta_dot = symbols("x_dot, z_dot, beta_dot")
-    # Construir polinomio lambda
-    t = symbols("t")
-    a_0, a_1, a_2, a_3, a_4, a_5 = symbols("a_0, a_1, a_2, a_3, a_4, a_5")
-    lam = a_0 + a_1 * t + a_2 * t**2 + a_3 * t**3 + a_4 * t**4 + a_5 * t**5    
-    lam_dot = diff(lam, t)
-    lam_dot_dot = diff(lam_dot, t)
-    # Almacenar variables en el objeto
-    self.th1, self.th2, self.th3 = th1, th2, th3
-    self.xi_0_p = xi_0_p
-    self.J_inv = J_inv
-    self.x_dot, self.z_dot, self.beta_dot = symbols("x_dot, z_dot, beta_dot")
-    self.a_0, self.a_1, self.a_2, self.a_3, self.a_4, self.a_5 = a_0, a_1, a_2, a_3, a_4, a_5
-    self.t = t
-    self.lam, self.lam_dot, self.lam_dot_dot = lam, lam_dot, lam_dot_dot
-    pass
-  def def_tray(self, t_f:float=2, frec:float=15, 
-               th_i:tuple[float]=(0.1, 0.1,0.1), 
-               xi_f:tuple[float]=(0.6, 0.1, 0)):
-    
-    # Posición del efector final substituyendo en la postura (m, rad)
-    xi_i = self.xi_0_p.subs({self.th1: th_i[0], 
-                             self.th2: th_i[1], 
-                             self.th3: th_i[2]})
-    # Muestreo y dt
-    self.dt = 1.0/frec
-    self.muestras = t_f * frec + 1
+class Robot:
+  def __init__(self,
+               l: Tuple[float, float] = (0.35, 0.30),
+               base_height: float = 0.38):
+    """
+    Cinematica compatible con el URDF del robot RRR.
 
-    #Eq. de restricción para trayectoria
-    eq1 = self.lam.subs({self.t: 0})
-    eq2 = self.lam.subs({self.t: t_f}) - 1
-    eq3 = self.lam_dot.subs({self.t: 0})
-    eq4 = self.lam_dot.subs({self.t: t_f})
-    eq5 = self.lam_dot_dot.subs({self.t: 0})
-    eq6 = self.lam_dot_dot.subs({self.t: t_f})
-    solutions = solve((eq1, eq2, eq3, eq4, eq5, eq6),
-                  (self.a_0, self.a_1, self.a_2, self.a_3, self.a_4, self.a_5))
-    # Sustituyendo solución en polinimio lambda
-    lam_s         = self.lam.subs(solutions)
-    lam_dot_s     = self.lam_dot.subs(solutions)
-    lam_dot_dot_s = self.lam_dot_dot.subs(solutions)
-    
-    # Ecuación de posiciones, velocidades y acc.
-    xi_f = Matrix([xi_f[0], xi_f[1], xi_f[2]])
-    xi_eq         = xi_i + (xi_f - xi_i) * lam_s
-    xi_dot_eq     = (xi_f - xi_i) * lam_dot_s
-    xi_dot_dot_eq = (xi_f - xi_i) * lam_dot_dot_s
-    
-    # Arreglos para almacenar muestreo
-    # Tiempo
-    t_m = Matrix.zeros(1, self.muestras)
+    Modelo:
+      shoulder_joint : revolute en Z
+      arm_joint      : revolute en Y
+      forearm_joint  : revolute en Y
+
+    Dimensiones usadas:
+      H0 = 0.38 m
+      L1 = 0.35 m
+      L2 = 0.30 m
+    """
+
+    self.L1 = float(l[0])
+    self.L2 = float(l[1])
+    self.H0 = float(base_height)
+
+    self.joint_limits = [
+      (-math.pi, math.pi),       # shoulder_joint
+      (-1.5708, 1.5708),         # arm_joint
+      (-1.5708, 1.5708),         # forearm_joint
+    ]
+
+    self.dt = 0.0
+    self.muestras = 0
+
+    self.t_m = None
+
+    self.xi_m = None
+    self.xi_dot_m = None
+    self.xi_dot_dot_m = None
+
+    self.th_m = None
+    self.th_dot_m = None
+    self.th_dot_dot_m = None
+
+  @staticmethod
+  def _fit_angle_to_seed(angle: float, seed: float) -> float:
+    """
+    Ajusta un angulo equivalente para que quede lo mas cercano posible
+    al angulo actual del robot.
+    """
+    while angle - seed > math.pi:
+      angle -= 2.0 * math.pi
+
+    while angle - seed < -math.pi:
+      angle += 2.0 * math.pi
+
+    return angle
+
+  def within_limits(self, q: Sequence[float], tol: float = 1e-8) -> bool:
+    """
+    Verifica si las juntas estan dentro de los limites del URDF.
+    """
+    for qi, (lo, hi) in zip(q, self.joint_limits):
+      if qi < lo - tol or qi > hi + tol:
+        return False
+
+    return True
+
+  def fk(self, q: Sequence[float]) -> np.ndarray:
+    """
+    Cinematica directa.
+
+    Entrada:
+      q = [shoulder_joint, arm_joint, forearm_joint]
+
+    Salida:
+      [x, y, z] del efector final.
+    """
+    q1, q2, q3 = [float(v) for v in q]
+
+    # Brazo 2R en un plano vertical local.
+    r = self.L1 * math.sin(q2) + self.L2 * math.sin(q2 + q3)
+    z = self.H0 + self.L1 * math.cos(q2) + self.L2 * math.cos(q2 + q3)
+
+    # Rotacion de la base alrededor de Z.
+    x = r * math.cos(q1)
+    y = r * math.sin(q1)
+
+    return np.array([x, y, z], dtype=float)
+
+  def ik(self,
+         x: float,
+         y: float,
+         z: float,
+         seed: Optional[Sequence[float]] = None) -> np.ndarray:
+    """
+    Cinematica inversa analitica.
+
+    Entrada:
+      x, y, z = posicion deseada del efector final.
+
+    Salida:
+      q = [shoulder_joint, arm_joint, forearm_joint]
+    """
+    if seed is None:
+      seed = (0.0, 0.0, 0.0)
+
+    x = float(x)
+    y = float(y)
+    z = float(z)
+
+    r = math.hypot(x, y)
+    z_local = z - self.H0
+
+    if r < 1e-9:
+      q1_base = float(seed[0])
+    else:
+      q1_base = math.atan2(y, x)
+      q1_base = self._fit_angle_to_seed(q1_base, float(seed[0]))
+
+    D = (r*r + z_local*z_local - self.L1*self.L1 - self.L2*self.L2) / (
+      2.0 * self.L1 * self.L2
+    )
+
+    # Ajuste por posibles errores numericos pequenos.
+    if D > 1.0 and D < 1.0 + 1e-9:
+      D = 1.0
+    elif D < -1.0 and D > -1.0 - 1e-9:
+      D = -1.0
+
+    if D < -1.0 or D > 1.0:
+      max_reach = self.L1 + self.L2
+      min_reach = abs(self.L1 - self.L2)
+      dist = math.sqrt(r*r + z_local*z_local)
+
+      raise ValueError(
+        "Punto fuera del alcance geometrico. "
+        f"dist={dist:.3f} m, "
+        f"rango=[{min_reach:.3f}, {max_reach:.3f}] m, "
+        f"objetivo=({x:.3f}, {y:.3f}, {z:.3f})"
+      )
+
+    candidates = []
+    root = math.sqrt(max(0.0, 1.0 - D*D))
+
+    for sign in (1.0, -1.0):
+      q3 = math.atan2(sign * root, D)
+
+      q2 = math.atan2(r, z_local) - math.atan2(
+        self.L2 * math.sin(q3),
+        self.L1 + self.L2 * math.cos(q3)
+      )
+
+      q = np.array([q1_base, q2, q3], dtype=float)
+
+      if self.within_limits(q):
+        cost = float(np.sum((q - np.array(seed, dtype=float))**2))
+        candidates.append((cost, q))
+
+    if not candidates:
+      raise ValueError(
+        "El punto es alcanzable geometricamente, pero no con los limites "
+        "articulares del URDF. "
+        f"objetivo=({x:.3f}, {y:.3f}, {z:.3f})"
+      )
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][1]
+
+  def closest_reachable_point(self,
+                              x: float,
+                              y: float,
+                              z: float,
+                              seed: Optional[Sequence[float]] = None,
+                              n_q2: int = 121,
+                              n_q3: int = 121):
+    """
+    Busca el punto alcanzable mas cercano al objetivo.
+
+    Esto sirve para que al publicar un punto fuera del workspace,
+    el robot no falle, sino que se mueva al punto valido mas cercano.
+    """
+    if seed is None:
+      seed = (0.0, 0.0, 0.0)
+
+    target = np.array([float(x), float(y), float(z)], dtype=float)
+
+    r = math.hypot(x, y)
+
+    if r < 1e-9:
+      q1 = float(seed[0])
+    else:
+      q1 = math.atan2(y, x)
+      q1 = self._fit_angle_to_seed(q1, float(seed[0]))
+
+    q1 = min(max(q1, self.joint_limits[0][0]), self.joint_limits[0][1])
+
+    q2_min, q2_max = self.joint_limits[1]
+    q3_min, q3_max = self.joint_limits[2]
+
+    best_point = None
+    best_q = None
+    best_cost = float("inf")
+
+    q2_values = np.linspace(q2_min, q2_max, n_q2)
+    q3_values = np.linspace(q3_min, q3_max, n_q3)
+
+    for q2 in q2_values:
+      for q3 in q3_values:
+        q = np.array([q1, q2, q3], dtype=float)
+        p = self.fk(q)
+
+        dist = float(np.linalg.norm(p - target))
+        posture_cost = 0.02 * float(np.linalg.norm(q - np.array(seed, dtype=float)))
+        cost = dist + posture_cost
+
+        if cost < best_cost:
+          best_cost = cost
+          best_point = p
+          best_q = q
+
+    real_distance = float(np.linalg.norm(best_point - target))
+
+    return best_point, best_q, real_distance
+
+  def def_tray(self,
+               t_f: float = 2.0,
+               frec: float = 15.0,
+               th_i: Sequence[float] = (0.1, 0.1, 0.1),
+               xi_f: Sequence[float] = (0.30, 0.0, 0.95)):
+    """
+    Genera trayectoria suave con polinomio de quinto grado.
+
+    Entrada:
+      th_i = posicion inicial de juntas
+      xi_f = posicion final deseada del efector [x, y, z]
+    """
+    th_i = np.array(th_i, dtype=float)
+
+    if len(xi_f) != 3:
+      raise ValueError("xi_f debe tener 3 valores: (x, y, z).")
+
+    xi_f = np.array(xi_f, dtype=float)
+
+    th_f = self.ik(
+      xi_f[0],
+      xi_f[1],
+      xi_f[2],
+      seed=th_i
+    )
+
+    self.dt = 1.0 / float(frec)
+    self.muestras = int(round(float(t_f) * float(frec))) + 1
+
+    self.t_m = np.zeros((1, self.muestras), dtype=float)
+
+    self.xi_m = np.zeros((3, self.muestras), dtype=float)
+    self.xi_dot_m = np.zeros((3, self.muestras), dtype=float)
+    self.xi_dot_dot_m = np.zeros((3, self.muestras), dtype=float)
+
+    self.th_m = np.zeros((3, self.muestras), dtype=float)
+    self.th_dot_m = np.zeros((3, self.muestras), dtype=float)
+    self.th_dot_dot_m = np.zeros((3, self.muestras), dtype=float)
+
+    delta_th = th_f - th_i
+
     for i in range(self.muestras):
-      t_m[i] = self.dt * i
-    # Posición, velocidad y aceleración del E.F.
-    xi_m         = Matrix.zeros(3, self.muestras)
-    xi_dot_m     = Matrix.zeros(3, self.muestras)
-    xi_dot_dot_m = Matrix.zeros(3, self.muestras)
-    # Muestreo E.F.
-    for i in range(self.muestras):
-      xi_m[:, i]         = xi_eq.        subs({self.t: t_m[i]})
-      xi_dot_m[:, i]     = xi_dot_eq.    subs({self.t: t_m[i]})
-      xi_dot_dot_m[:, i] = xi_dot_dot_eq.subs({self.t: t_m[i]})
-    print(xi_m[:, self.muestras - 1])
-    # ---- Cinemática inversa
-    # Velocidades de las juntas como ecuación
-    th_dot_eq = self.J_inv * Matrix([self.x_dot, 
-                                     self.z_dot,
-                                     self.beta_dot])
-    # Posición, velocidad y aceleración de las juntas
-    th_m         = Matrix.zeros(3, self.muestras)
-    th_dot_m     = Matrix.zeros(3, self.muestras)
-    th_dot_dot_m = Matrix.zeros(3, self.muestras)
-    # Agregar valor conocido
-    th_m[:, 0] = Matrix([th_i[0], 
-                         th_i[1], 
-                         th_i[2]])
-    #Muestreo de las juntas
-    for i in range(self.muestras):
-      # Velocidades
-      th_dot_m[:, i] = th_dot_eq.subs({
-        self.th1: th_m[0, i],
-        self.th2: th_m[1, i],
-        self.th3: th_m[2, i],
-        self.x_dot:    xi_dot_m[0, i],
-        self.z_dot:    xi_dot_m[1, i],
-        self.beta_dot: xi_dot_m[2, i]})
-      th_dot_m[:, i] = th_dot_m[:, i].evalf()
-      if i < self.muestras - 1:
-        # Posiciones
-        th_m[:, i+1] = th_m[:, i] + th_dot_m[:, i] * self.dt
-      if not (i == 0):
-        # Aceleración
-        th_dot_dot_m[:, i-1] = (th_dot_m[:, i] - th_dot_m[:, i-1]) / self.dt
-      
-    # Guardar variables en la clase 
-    # Efector final
-    self.xi_m         = xi_m
-    self.xi_dot_m     = xi_dot_m
-    self.xi_dot_dot_m = xi_dot_dot_m
-    # Juntas
-    self.th_m         = th_m
-    self.th_dot_m     = th_dot_m
-    self.th_dot_dot_m = th_dot_dot_m
-    # Tiempo
-    self.t_m = t_m
+      t = self.dt * i
+      self.t_m[0, i] = t
 
-  def imp_tray(self):
-    fig, (x_g, z_g, be_g) = plt.subplots(nrows = 1, ncols = 3)
-    fig.suptitle("Posiciones del efector final")
-    x_g.set_title("x")
-    z_g.set_title("z")
-    be_g.set_title("beta")
-    x_g.plot(self.t_m.T,  self.xi_m[0, :].T, color="RED")
-    z_g.plot(self.t_m.T,  self.xi_m[1, :].T, color="green")
-    be_g.plot(self.t_m.T, self.xi_m[2, :].T, color=(0,0,1))
+      s = min(max(t / float(t_f), 0.0), 1.0)
+
+      # Polinomio quintico:
+      # lambda(0)=0, lambda(tf)=1,
+      # velocidad y aceleracion inicial/final en cero.
+      lam = 10.0*s**3 - 15.0*s**4 + 6.0*s**5
+      lam_dot = (30.0*s**2 - 60.0*s**3 + 30.0*s**4) / float(t_f)
+      lam_dot_dot = (60.0*s - 180.0*s**2 + 120.0*s**3) / (float(t_f)**2)
+
+      q = th_i + delta_th * lam
+
+      self.th_m[:, i] = q
+      self.th_dot_m[:, i] = delta_th * lam_dot
+      self.th_dot_dot_m[:, i] = delta_th * lam_dot_dot
+
+      self.xi_m[:, i] = self.fk(q)
+
+    # Derivadas cartesianas numericas.
+    if self.muestras > 1:
+      self.xi_dot_m[:, 1:] = np.diff(self.xi_m, axis=1) / self.dt
+      self.xi_dot_m[:, 0] = self.xi_dot_m[:, 1]
+
+      self.xi_dot_dot_m[:, 1:] = np.diff(self.xi_dot_m, axis=1) / self.dt
+      self.xi_dot_dot_m[:, 0] = self.xi_dot_dot_m[:, 1]
+
+    print("Objetivo cartesiano [x, y, z]:", xi_f)
+    print("FK inicial [x, y, z]:", self.xi_m[:, 0])
+    print("FK final   [x, y, z]:", self.xi_m[:, -1])
+    print("Juntas finales [shoulder, arm, forearm]:", self.th_m[:, -1])
+
+  def imp_tray(self, show: bool = True):
+    """
+    Grafica posicion, velocidad y aceleracion del efector final.
+    Basada en el formato del codigo preliminar 3D.
+    """
+    import matplotlib.pyplot as plt
+
+    fig, axs = plt.subplots(nrows=3, ncols=3, figsize=(12, 8))
+    fig.suptitle("Dinamica del Efector Final (Espacio Cartesiano 3D)")
+
+    componentes = ["Eje X", "Eje Y", "Eje Z"]
+    colores = ["red", "green", "blue"]
+
+    for i in range(3):
+      axs[0, i].set_title(f"Posicion {componentes[i]}")
+      axs[0, i].plot(self.t_m.T, self.xi_m[i, :].T, color=colores[i])
+      axs[0, i].grid(True)
+
+      axs[1, i].set_title(f"Velocidad {componentes[i]}")
+      axs[1, i].plot(
+        self.t_m.T,
+        self.xi_dot_m[i, :].T,
+        color=colores[i],
+        linestyle="--"
+      )
+      axs[1, i].grid(True)
+
+      axs[2, i].set_title(f"Aceleracion {componentes[i]}")
+      axs[2, i].plot(
+        self.t_m.T,
+        self.xi_dot_dot_m[i, :].T,
+        color=colores[i],
+        linestyle=":"
+      )
+      axs[2, i].grid(True)
+
+    for ax in axs[2, :]:
+      ax.set_xlabel("Tiempo [s]")
+
+    axs[0, 0].set_ylabel("Posicion [m]")
+    axs[1, 0].set_ylabel("Velocidad [m/s]")
+    axs[2, 0].set_ylabel("Aceleracion [m/s^2]")
+
+    plt.tight_layout()
+
+    if show:
+      plt.show()
+
+    return fig
+
+  def imp_junt(self, show: bool = True):
+    """
+    Grafica posicion, velocidad y aceleracion de las juntas.
+    Basada en el formato del codigo preliminar 3D.
+    """
+    import matplotlib.pyplot as plt
+
+    fig, axs = plt.subplots(nrows=3, ncols=3, figsize=(12, 8))
+    fig.suptitle("Dinamica de las Juntas (Espacio Articular)")
+
+    juntas = [
+      "Hombro / Base (shoulder)",
+      "Brazo (arm)",
+      "Antebrazo (forearm)"
+    ]
+
+    colores = ["orange", "purple", "brown"]
+
+    for i in range(3):
+      axs[0, i].set_title(f"Posicion {juntas[i]}")
+      axs[0, i].plot(self.t_m.T, self.th_m[i, :].T, color=colores[i])
+      axs[0, i].grid(True)
+
+      axs[1, i].set_title(f"Velocidad {juntas[i]}")
+      axs[1, i].plot(
+        self.t_m.T,
+        self.th_dot_m[i, :].T,
+        color=colores[i],
+        linestyle="--"
+      )
+      axs[1, i].grid(True)
+
+      axs[2, i].set_title(f"Aceleracion {juntas[i]}")
+      axs[2, i].plot(
+        self.t_m.T,
+        self.th_dot_dot_m[i, :].T,
+        color=colores[i],
+        linestyle=":"
+      )
+      axs[2, i].grid(True)
+
+    for ax in axs[2, :]:
+      ax.set_xlabel("Tiempo [s]")
+
+    axs[0, 0].set_ylabel("Posicion [rad]")
+    axs[1, 0].set_ylabel("Velocidad [rad/s]")
+    axs[2, 0].set_ylabel("Aceleracion [rad/s^2]")
+
+    plt.tight_layout()
+
+    if show:
+      plt.show()
+
+    return fig
+
+  def mostrar_graficas(self):
+    """
+    Crea las dos figuras y abre Matplotlib una sola vez.
+
+    Esto evita que ROS deje las ventanas congeladas o que solo aparezca
+    una de las dos figuras.
+    """
+    import matplotlib.pyplot as plt
+
+    self.imp_tray(show=False)
+    self.imp_junt(show=False)
+
     plt.show()
-    pass
-  def imp_junt(self):
-    fig, (th1_g, th2_g, th3_g) = plt.subplots(nrows = 1, ncols = 3)
-    fig.suptitle("Posiciones de las juntas")
-    th1_g.set_title("th1")
-    th2_g.set_title("th2")
-    th3_g.set_title("th3")
-    th1_g.plot(self.t_m.T,  self.th_m[0, :].T, color="RED")
-    th2_g.plot(self.t_m.T,  self.th_m[1, :].T, color="green")
-    th3_g.plot(self.t_m.T,  self.th_m[2, :].T, color=(0,0,1))
-    plt.show()
-    pass
-  def tr_h(self, x=0, y=0, z=0,
-                 gamma=0, beta=0, alpha=0):
-    t_x = Matrix([[1,          0,           0, x],
-                  [0, cos(gamma), -sin(gamma), 0],
-                  [0, sin(gamma),  cos(gamma), 0],
-                  [0,          0,           0, 1]])
-    t_y = Matrix([[ cos(beta),          0, sin(beta), 0],
-                  [         0,          1,         0, y],
-                  [-sin(beta),          0, cos(beta), 0],
-                  [         0,          0,         0, 1]])
-    t_z = Matrix([[cos(alpha), -sin(alpha), 0, 0],
-                  [sin(alpha),  cos(alpha), 0, 0],
-                  [         0,           0, 1, z],
-                  [         0,           0, 0, 1]])
-    tr = simplify(t_x * t_y * t_z)
-    return tr
+
 
 def main():
   robot = Robot()
-  robot.def_tray()
-  robot.imp_tray()
-  robot.imp_junt()
+
+  q = (0.1, 0.1, 0.1)
+
+  print("Validacion FK con q=(0.1, 0.1, 0.1):")
+  print(robot.fk(q))
+
+  robot.def_tray(
+    th_i=q,
+    xi_f=(0.30, 0.0, 0.95)
+  )
+
+  robot.mostrar_graficas()
+
+
 if __name__ == "__main__":
   main()
