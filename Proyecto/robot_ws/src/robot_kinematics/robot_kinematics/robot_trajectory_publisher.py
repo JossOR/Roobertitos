@@ -17,7 +17,7 @@ class PublicadorTrayectoria(Node):
                                               1)
     # Publicador estado de las juntas deseado
     self.js_pub = self.create_publisher(JointState, 
-                                        "/joint_states_goals",
+                                        "/joint_states",
                                         1)
     # Suscriptor a estado de las juntas actual
     self.js_sub = self.create_subscription(
@@ -36,7 +36,7 @@ class PublicadorTrayectoria(Node):
     self.is_moving = False
     # Inicializar estado actual de las juntas en cero
     self.js_current = JointState()
-    self.js_current.position = [0.0, 0.0, 0.0]
+    self.js_current.position = [0.1, 0.1, 0.1]
   # Callback de posición deseada como twist
   def twist_callback(self, msg:Twist):
     if self.is_moving:

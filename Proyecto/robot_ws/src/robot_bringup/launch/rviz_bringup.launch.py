@@ -34,13 +34,16 @@ def generate_launch_description():
     parameters=[urdf_param]
   )
   # Interfaz gráfica para publicar estado de juntas
+  # Inicia las juntas en 0.1 para evitar singularidad
   joint_publisher_node = Node(
     package="joint_state_publisher_gui",
-    executable="joint_state_publisher_gui"
+    executable="joint_state_publisher_gui",
+    parameters=[{"zeros": {"shoulder_joint": 0.1,
+                           "arm_joint": 0.1,
+                           "forearm_joint": 0.1}}]
   )
   launch_description = LaunchDescription([
     rviz_node, robot_description_node, 
     joint_publisher_node
   ])
   return launch_description
-  
